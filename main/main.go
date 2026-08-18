@@ -18,15 +18,28 @@ func balance(clientConn net.Conn, port string) {
 		return
 	}
 
-	buffer := make([]byte, 1024)
+	clientBuffer := make([]byte, 1024)
+	serverBuffer := make([]byte, 1024)
 
 	for {
-		_, err := clientConn.Read(buffer)
+		n, err := clientConn.Read(clientBuffer)
 		if err != nil {
 			fmt.Println("Error reading from connection")
 			return
 		}
-		_, err = serverConn.Write(buffer)
+		_, err = serverConn.Write(clientBuffer[:n])
+		if err != nil {
+			fmt.Println("Error writing to connection")
+			return
+		}
+
+		n, err = serverConn.Read(serverBuffer)
+		if err != nil {
+			fmt.Println("Error reading from connection")
+			return
+		}
+
+		_, err = clientConn.Write(serverBuffer[:n])
 		if err != nil {
 			fmt.Println("Error writing to connection")
 			return

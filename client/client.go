@@ -16,6 +16,8 @@ func main() {
 	defer conn.Close()
 	scanner := bufio.NewScanner(os.Stdin)
 
+	buffer := make([]byte, 1024)
+
 	for {
 		fmt.Println("Type in message to send!")
 		scanner.Scan()
@@ -29,6 +31,9 @@ func main() {
 		if line == "turn off" {
 			break
 		}
+
+		n, err := conn.Read(buffer)
+		fmt.Printf("Server says: %s\n", string(buffer[:n]))
 
 	}
 
