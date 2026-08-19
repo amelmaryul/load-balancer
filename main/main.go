@@ -5,13 +5,30 @@ import (
 	"net"
 )
 
-var servers = map[int]string{
-	1: ":51",
-	2: ":52",
-	3: ":53",
+type ConnectionPool struct {
+	servers  []item
+	smallest int
+}
+type item struct {
+	port        string
+	connections int
 }
 
-func balance(clientConn net.Conn, port string) {
+func (c *ConnectionPool) updateSmallest() {
+	for i, v := range c.servers {
+		if c.servers[c.smallest].connections > v.connections {
+			c.smallest = i
+		}
+	}
+}
+
+func balance(clientConn net.Conn, c *ConnectionPool) {
+	// should lock struc here i think
+	port := c.servers[c.smallest].port
+	c.servers[c.smallest].connections++
+	idx := c.smallest
+	c.updateSmallest()
+
 	serverConn, err := net.Dial("tcp", port)
 	if err != nil {
 		fmt.Println("Error creating connection object")
@@ -20,6 +37,12 @@ func balance(clientConn net.Conn, port string) {
 
 	clientBuffer := make([]byte, 1024)
 	serverBuffer := make([]byte, 1024)
+
+	defer func() {
+		// should lock struct here i think again
+		c.servers[idx].connections--
+		c.updateSmallest()
+	}()
 
 	for {
 		n, err := clientConn.Read(clientBuffer)
@@ -49,6 +72,27 @@ func balance(clientConn net.Conn, port string) {
 }
 
 func main() {
+	s := make([]item, 3) // 3 here is the amount of servers we have
+	s[0] = item{
+		port:        ":51",
+		connections: 0,
+	}
+
+	s[1] = item{
+		port:        ":52",
+		connections: 0,
+	}
+
+	s[2] = item{
+		port:        ":53",
+		connections: 0,
+	}
+
+	c := ConnectionPool{
+		servers:  s,
+		smallest: 0,
+	}
+
 	go runServerA()
 	go runServerB()
 	go runServerC()
@@ -71,7 +115,7 @@ func main() {
 		if count > 3 {
 			count = 1
 		}
-		go balance(conn, servers[count])
+		go balance(conn, &c)
 	}
 
 }
