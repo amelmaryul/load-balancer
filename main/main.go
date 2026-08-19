@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 )
 
 type ConnectionPool struct {
@@ -14,19 +15,71 @@ type ConnectionPool struct {
 type item struct {
 	port        string
 	connections int
+	isAlive     bool
 }
 
 func (c *ConnectionPool) updateSmallest() {
 	for i, v := range c.servers {
-		if c.servers[c.smallest].connections > v.connections {
+		if !c.servers[c.smallest].isAlive && v.isAlive || (v.isAlive && v.connections < c.servers[c.smallest].connections) {
 			c.smallest = i
 		}
 	}
 }
 
+func sendHeartBeats2(c *ConnectionPool) {
+	n := 0
+	c.mu.Lock()
+	for _, v := range c.servers {
+		isAlive := checkIfAlive(v.port)
+		if !isAlive {
+			n++
+			c.mu.Lock()
+		}
+		v.isAlive = isAlive
+	}
+
+	if n > 0 {
+		c.updateSmallest()
+		c.mu.Unlock()
+	}
+}
+
+func sendHeartBeats(c *ConnectionPool) {
+	for {
+		c.mu.Lock()
+		for i, v := range c.servers {
+			isAlive := checkIfAlive(v.port)
+			c.servers[i].isAlive = isAlive
+
+		}
+		c.updateSmallest()
+		c.mu.Unlock()
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func checkIfAlive(port string) bool {
+	conn, err := net.Dial("tcp", port)
+	if err != nil {
+		return false
+	}
+
+	_, err = conn.Write([]byte("Are you alive"))
+	if err != nil {
+		return false
+	}
+
+	return true
+
+}
+
 func balance(clientConn net.Conn, c *ConnectionPool) {
 	c.mu.Lock()
 	port := c.servers[c.smallest].port
+	if !c.servers[c.smallest].isAlive {
+		clientConn.Write([]byte("All servers are down"))
+		return
+	}
 	c.servers[c.smallest].connections++
 	idx := c.smallest
 	c.updateSmallest()
@@ -80,16 +133,19 @@ func main() {
 	s[0] = item{
 		port:        ":51",
 		connections: 0,
+		isAlive:     true,
 	}
 
 	s[1] = item{
 		port:        ":52",
 		connections: 0,
+		isAlive:     true,
 	}
 
 	s[2] = item{
 		port:        ":53",
 		connections: 0,
+		isAlive:     true,
 	}
 
 	c := ConnectionPool{
@@ -97,9 +153,11 @@ func main() {
 		smallest: 0,
 	}
 
-	go runServerA()
-	go runServerB()
-	go runServerC()
+	/*
+		go runServerA()
+		go runServerB()
+		go runServerC()
+	*/
 
 	count := 0
 	listener, err := net.Listen("tcp", ":50")
@@ -108,6 +166,8 @@ func main() {
 		return
 	}
 	defer listener.Close()
+
+	go sendHeartBeats(&c)
 
 	for {
 		conn, err := listener.Accept()
