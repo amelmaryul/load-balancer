@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"net"
+	"sync"
 )
 
 type ConnectionPool struct {
+	mu       sync.Mutex
 	servers  []item
 	smallest int
 }
@@ -23,11 +25,12 @@ func (c *ConnectionPool) updateSmallest() {
 }
 
 func balance(clientConn net.Conn, c *ConnectionPool) {
-	// should lock struc here i think
+	c.mu.Lock()
 	port := c.servers[c.smallest].port
 	c.servers[c.smallest].connections++
 	idx := c.smallest
 	c.updateSmallest()
+	c.mu.Unlock()
 
 	serverConn, err := net.Dial("tcp", port)
 	if err != nil {
@@ -39,9 +42,10 @@ func balance(clientConn net.Conn, c *ConnectionPool) {
 	serverBuffer := make([]byte, 1024)
 
 	defer func() {
-		// should lock struct here i think again
+		c.mu.Lock()
 		c.servers[idx].connections--
 		c.updateSmallest()
+		c.mu.Unlock()
 	}()
 
 	for {
