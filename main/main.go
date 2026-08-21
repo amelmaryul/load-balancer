@@ -80,6 +80,7 @@ func balance(clientConn net.Conn, c *ConnectionPool) {
 	port := c.servers[c.smallest].Port
 	if !c.servers[c.smallest].IsAlive {
 		clientConn.Write([]byte("All servers are down"))
+		c.mu.Unlock()
 		return
 	}
 	c.servers[c.smallest].Connections++
