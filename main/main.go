@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -13,14 +15,14 @@ type ConnectionPool struct {
 	smallest int
 }
 type item struct {
-	port        string
-	connections int
-	isAlive     bool
+	Port        string
+	Connections int
+	IsAlive     bool
 }
 
 func (c *ConnectionPool) updateSmallest() {
 	for i, v := range c.servers {
-		if !c.servers[c.smallest].isAlive && v.isAlive || (v.isAlive && v.connections < c.servers[c.smallest].connections) {
+		if !c.servers[c.smallest].IsAlive && v.IsAlive || (v.IsAlive && v.Connections < c.servers[c.smallest].Connections) {
 			c.smallest = i
 		}
 	}
@@ -30,12 +32,12 @@ func sendHeartBeats2(c *ConnectionPool) {
 	n := 0
 	c.mu.Lock()
 	for _, v := range c.servers {
-		isAlive := checkIfAlive(v.port)
+		isAlive := checkIfAlive(v.Port)
 		if !isAlive {
 			n++
 			c.mu.Lock()
 		}
-		v.isAlive = isAlive
+		v.IsAlive = isAlive
 	}
 
 	if n > 0 {
@@ -48,8 +50,8 @@ func sendHeartBeats(c *ConnectionPool) {
 	for {
 		c.mu.Lock()
 		for i, v := range c.servers {
-			isAlive := checkIfAlive(v.port)
-			c.servers[i].isAlive = isAlive
+			isAlive := checkIfAlive(v.Port)
+			c.servers[i].IsAlive = isAlive
 
 		}
 		c.updateSmallest()
@@ -75,12 +77,12 @@ func checkIfAlive(port string) bool {
 
 func balance(clientConn net.Conn, c *ConnectionPool) {
 	c.mu.Lock()
-	port := c.servers[c.smallest].port
-	if !c.servers[c.smallest].isAlive {
+	port := c.servers[c.smallest].Port
+	if !c.servers[c.smallest].IsAlive {
 		clientConn.Write([]byte("All servers are down"))
 		return
 	}
-	c.servers[c.smallest].connections++
+	c.servers[c.smallest].Connections++
 	idx := c.smallest
 	c.updateSmallest()
 	c.mu.Unlock()
@@ -96,7 +98,7 @@ func balance(clientConn net.Conn, c *ConnectionPool) {
 
 	defer func() {
 		c.mu.Lock()
-		c.servers[idx].connections--
+		c.servers[idx].Connections--
 		c.updateSmallest()
 		c.mu.Unlock()
 	}()
@@ -129,23 +131,17 @@ func balance(clientConn net.Conn, c *ConnectionPool) {
 }
 
 func main() {
-	s := make([]item, 3) // 3 here is the amount of servers we have
-	s[0] = item{
-		port:        ":51",
-		connections: 0,
-		isAlive:     true,
+	b, err := os.ReadFile("../config.json")
+	if err != nil {
+		fmt.Printf("Error reading config.json: %s\n", err.Error())
+		return
 	}
 
-	s[1] = item{
-		port:        ":52",
-		connections: 0,
-		isAlive:     true,
-	}
-
-	s[2] = item{
-		port:        ":53",
-		connections: 0,
-		isAlive:     true,
+	var s []item
+	err = json.Unmarshal(b, &s)
+	if err != nil {
+		fmt.Printf("Error unmarshalling: %s\n", err.Error())
+		return
 	}
 
 	c := ConnectionPool{

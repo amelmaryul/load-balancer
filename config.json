@@ -1,0 +1,5 @@
+[
+    { "port": "localhost:51", "connections": 0, "isAllive": true },
+    { "port": "localhost:52", "connections": 0, "isAllive": true},
+    { "port": "localhost:53", "connections": 0, "isAllive": true}
+]
