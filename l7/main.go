@@ -67,29 +67,11 @@ func getData(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		// return an error message
+		w.WriteHeader(404)
 	}
 }
 
 func main() {
 	http.HandleFunc("/", getData)
 	http.ListenAndServe(":8080", nil)
-}
-
-func main2() {
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get("https://httpbin.org/get")
-	if err != nil {
-		fmt.Printf("Error creating Get req: %s\n", err.Error())
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		fmt.Printf("Error reading body: %s\n", err.Error())
-		return
-	}
-
-	fmt.Println(string(body))
 }
