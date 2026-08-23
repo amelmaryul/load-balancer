@@ -28,24 +28,6 @@ func (c *ConnectionPool) updateSmallest() {
 	}
 }
 
-func sendHeartBeats2(c *ConnectionPool) {
-	n := 0
-	c.mu.Lock()
-	for _, v := range c.servers {
-		isAlive := checkIfAlive(v.Port)
-		if !isAlive {
-			n++
-			c.mu.Lock()
-		}
-		v.IsAlive = isAlive
-	}
-
-	if n > 0 {
-		c.updateSmallest()
-		c.mu.Unlock()
-	}
-}
-
 func sendHeartBeats(c *ConnectionPool) {
 	for {
 		c.mu.Lock()
