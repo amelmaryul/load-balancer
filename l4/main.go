@@ -89,7 +89,7 @@ func balance(clientConn net.Conn, c *ConnectionPool) {
 	for {
 		n, err := clientConn.Read(clientBuffer)
 		if err != nil {
-			fmt.Println("Error reading from connection")
+			fmt.Printf("Error reading from client connection: %s\n", err.Error())
 			return
 		}
 		_, err = serverConn.Write(clientBuffer[:n])
@@ -100,7 +100,7 @@ func balance(clientConn net.Conn, c *ConnectionPool) {
 
 		n, err = serverConn.Read(serverBuffer)
 		if err != nil {
-			fmt.Println("Error reading from connection")
+			fmt.Printf("Error reading from server connection: %s\n", err.Error())
 			return
 		}
 
@@ -114,7 +114,7 @@ func balance(clientConn net.Conn, c *ConnectionPool) {
 }
 
 func main() {
-	b, err := os.ReadFile("../config.json")
+	b, err := os.ReadFile("./config.json")
 	if err != nil {
 		fmt.Printf("Error reading config.json: %s\n", err.Error())
 		return
@@ -132,14 +132,8 @@ func main() {
 		smallest: 0,
 	}
 
-	/*
-		go runServerA()
-		go runServerB()
-		go runServerC()
-	*/
-
 	count := 0
-	listener, err := net.Listen("tcp", ":50")
+	listener, err := net.Listen("tcp", ":60")
 	if err != nil {
 		fmt.Println("Error while trying ot create server socket")
 		return
