@@ -20,6 +20,11 @@ type item struct {
 	Connections int
 	IsAlive     bool
 }
+type config struct {
+	TcpPort  string `json:"tcp_port"`
+	HttpPort string `json:"http_port"`
+	Servers  []item `json:"servers"`
+}
 
 type stats struct {
 	Size    int    `json:"size"`
@@ -119,9 +124,9 @@ func balance(clientConn net.Conn, c *ConnectionPool) {
 	}
 }
 
-func startHttpServer(handler http.HandlerFunc) {
+func startHttpServer(handler http.HandlerFunc, port string) {
 	http.HandleFunc("/api/stats", handler)
-	http.ListenAndServe(":70", nil)
+	http.ListenAndServe(port, nil)
 
 }
 
@@ -152,20 +157,20 @@ func main() {
 		return
 	}
 
-	var s []item
-	err = json.Unmarshal(b, &s)
+	var co config
+	err = json.Unmarshal(b, &co)
 	if err != nil {
 		fmt.Printf("Error unmarshalling: %s\n", err.Error())
 		return
 	}
 
 	c := ConnectionPool{
-		servers:  s,
+		servers:  co.Servers,
 		smallest: 0,
 	}
 
 	count := 0
-	listener, err := net.Listen("tcp", ":60")
+	listener, err := net.Listen("tcp", co.TcpPort)
 	if err != nil {
 		fmt.Println("Error while trying ot create server socket")
 		return
@@ -175,7 +180,7 @@ func main() {
 	go sendHeartBeats(&c)
 
 	handler := closure(&c)
-	go startHttpServer(handler)
+	go startHttpServer(handler, co.HttpPort)
 
 	for {
 		conn, err := listener.Accept()
