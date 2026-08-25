@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -18,6 +19,11 @@ type item struct {
 	Port        string
 	Connections int
 	IsAlive     bool
+}
+
+type stats struct {
+	Size    int    `json:"size"`
+	Servers []item `json:"servers"`
 }
 
 func (c *ConnectionPool) updateSmallest() {
@@ -113,6 +119,32 @@ func balance(clientConn net.Conn, c *ConnectionPool) {
 	}
 }
 
+func startHttpServer(handler http.HandlerFunc) {
+	http.HandleFunc("/api/stats", handler)
+	http.ListenAndServe(":70", nil)
+
+}
+
+func closure(c *ConnectionPool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		s := stats{
+			Size:    len(c.servers),
+			Servers: c.servers,
+		}
+
+		b, err := json.Marshal(&s)
+		if err != nil {
+			fmt.Printf("Error creating json stats object: %s\n", err.Error())
+			return
+		}
+
+		w.Write(b)
+
+	}
+}
+
 func main() {
 	b, err := os.ReadFile("./config.json")
 	if err != nil {
@@ -141,6 +173,9 @@ func main() {
 	defer listener.Close()
 
 	go sendHeartBeats(&c)
+
+	handler := closure(&c)
+	go startHttpServer(handler)
 
 	for {
 		conn, err := listener.Accept()
